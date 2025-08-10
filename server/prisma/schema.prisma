@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  currentOrgId String?
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  tz           String   @default("Asia/Jerusalem")
+  locale       String   @default("he")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // back-relations קיימים
+  connections   SocialConnection[]
+  campaigns     Campaign[]
+  leads         Lead[]
+  competitors   Competitor[]
+  notifications Notification[]
+
+  // 🔧 הוספה – פותרים את השגיאה:
+  posts           Post[]
+  recommendations Recommendation[]
+  Membership      Membership[]
+}
+
+model SocialConnection {
+  orgId        String?
+  id           String   @id @default(cuid())
+  userId       String
+  platform     String // instagram|tiktok|facebook|whatsapp
+  accessToken  String?
+  refreshToken String?
+  meta         Json?
+  createdAt    DateTime @default(now())
+
+  // יחסים
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization? @relation(fields: [orgId], references: [id]) // 🔧 יחסי ארגון
+
+  @@unique([userId, platform], name: "userId_platform")
+}
+
+model Campaign {
+  orgId     String?
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  platform  String // instagram|tiktok|facebook
+  objective String?
+  budget    Float     @default(0)
+  status    String    @default("draft") // draft|active|paused|completed
+  startDate DateTime?
+  endDate   DateTime?
+  roi       Float?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // יחסים
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org   Organization? @relation(fields: [orgId], references: [id]) // 🔧
+  leads Lead[]
+}
+
+model Lead {
+  orgId      String?
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String?
+  name       String?
+  phone      String?
+  email      String?
+  source     String? // campaign|post|form
+  createdAt  DateTime @default(now())
+
+  // יחסים
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign?     @relation(fields: [campaignId], references: [id])
+  org      Organization? @relation(fields: [orgId], references: [id]) // 🔧
+}
+
+model Competitor {
+  orgId     String?
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String // instagram|tiktok|facebook
+  handle    String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // אופציונלי אבל מומלץ
+
+  // יחסים
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization? @relation(fields: [orgId], references: [id]) // 🔧
+
+  @@unique([userId, platform, handle], name: "userId_platform_handle") // מומלץ למנוע כפילויות
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // אופציונלי אבל מומלץ
+
+  // יחסים
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  orgId     String?
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // lead_new | campaign_alert | suggestion
+  payload   Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // יחסים
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization? @relation(fields: [orgId], references: [id]) // 🔧
+}
+
+model Post {
+  orgId         String?
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime?
+  lastError     String?
+  id            String    @id @default(cuid())
+  userId        String
+  text          String
+  mediaUrl      String?
+  platforms     Json
+  scheduledAt   DateTime?
+  status        String    @default("draft") // draft|scheduled|published|failed
+  result        Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // יחסים
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization? @relation(fields: [orgId], references: [id]) // 🔧
+}
+
+model Organization {
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+  id          String   @id @default(cuid())
+  name        String
+  createdAt   DateTime @default(now())
+
+  users         Membership[]
+  connections   SocialConnection[]
+  posts         Post[]
+  campaigns     Campaign[]
+  leads         Lead[]
+  competitors   Competitor[]
+  notifications Notification[]
+}
+
+model Membership {
+  id     String @id @default(cuid())
+  userId String
+  orgId  String
+  role   String @default("owner")
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  orgId     String?
+  action    String
+  entity    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+}
